@@ -86,8 +86,32 @@
             evt.currentTarget.className += " active";
         }
 
+        const spinnerStyle = document.createElement('style');
+        spinnerStyle.textContent = `
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(spinnerStyle);
+
         async function uploadFile() {
             const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a PDF file');
+                return;
+            }
+
+            document.getElementById('uploadResult').innerHTML = `
+                <div class="result">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <div>📤 Uploading and processing PDF...<br><small>This may take 10-30 seconds</small></div>
+                    </div>
+                </div>`;
+
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
             
@@ -112,16 +136,6 @@
                         <div>🔍 Searching documents and generating answer...</div>
                     </div>
                 </div>`;
-
-            // Add CSS for spinner
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-            `;
-            document.head.appendChild(style);
 
             try {
                 const response = await fetch('/ask', {
