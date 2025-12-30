@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LangChain RAG System</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .tab { overflow: hidden; border: 1px solid #ccc; background-color: #f1f1f1; border-radius: 5px; }
+        .tab button { background-color: inherit; float: left; color: #333; border: none; outline: none; cursor: pointer; padding: 14px 16px; transition: 0.3s; }
+        .tab button:hover { background-color: #ddd; }
+        .tab button.active { background-color: #007bff; color: white; }
+        .tabcontent { display: none; padding: 20px; border: 1px solid #ccc; border-top: none; border-radius: 0 0 5px 5px; }
+        .result { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007bff; }
+        .source { background: #e9ecef; padding: 10px; margin: 5px 0; border-radius: 3px; font-size: 0.9em; }
+        input, textarea, button { margin: 5px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+        button { background: #007bff; color: white; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .stats { background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 LangChain RAG System</h1>
+        <p><strong>Features:</strong> Retrieval Augmented Generation (RAG) • Lightweight LLM • Text Summarization • Memory Management</p>
+        
+        <div class="tab">
+            <button class="tablinks" onclick="openTab(event, 'Upload')">📄 Upload PDF</button>
+            <button class="tablinks" onclick="openTab(event, 'Ask')">❓ RAG Query</button>
+            <button class="tablinks" onclick="openTab(event, 'Summarize')">📝 Summarize</button>
+            <button class="tablinks" onclick="openTab(event, 'Chat')">💬 Chat</button>
+            <button class="tablinks" onclick="openTab(event, 'Memory')">🧠 Memory</button>
+            <button class="tablinks" onclick="openTab(event, 'Documents')">📚 Documents</button>
+        </div>
+
+        <div id="Upload" class="tabcontent">
+            <h3>Upload PDF for RAG</h3>
+            <input type="file" id="fileInput" accept=".pdf">
+            <button onclick="uploadFile()">Process PDF</button>
+            <div id="uploadResult"></div>
+        </div>
+
+        <div id="Ask" class="tabcontent">
+            <h3>RAG Query - Ask Questions</h3>
+            <input type="text" id="questionInput" placeholder="Ask about your documents..." style="width: 400px;">
+            <button onclick="askQuestion()">Ask RAG</button>
+            <div id="askResult"></div>
+        </div>
+
+        <div id="Summarize" class="tabcontent">
+            <h3>Text Summarization</h3>
+            <textarea id="textInput" placeholder="Enter text to summarize OR paste a Document ID from the Documents tab..." style="width: 100%; height: 150px;"></textarea>
+            <button onclick="summarizeText()">Summarize</button>
+            <div id="summaryResult"></div>
+        </div>
+
+        <div id="Chat" class="tabcontent">
+            <h3>Chat with Memory</h3>
+            <input type="text" id="chatInput" placeholder="Type your message..." style="width: 400px;">
+            <button onclick="sendChat()">Send</button>
+            <button onclick="clearChatMemory()" style="background: #dc3545;">Clear Memory</button>
+            <div id="chatResult"></div>
+        </div>
+
+        <div id="Memory" class="tabcontent">
+            <h3>Memory Management</h3>
+            <button onclick="checkMemory()">Check Memory</button>
+                <button onclick="clearAllMemory()" style="background: #dc3545;">Clear All Memory</button>
+                <div id="memoryResult"></div>
+        </div>
+
+        <div id="Documents" class="tabcontent">
+            <h3>Document Management</h3>
+            <button onclick="loadDocuments()">Load Documents</button>
+            <div id="documentsResult"></div>
+        </div>
+    </div>
+
+    <script>
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) tabcontent[i].style.display = "none";
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) tablinks[i].className = tablinks[i].className.replace(" active", "");
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            const response = await fetch('/upload', { method: 'POST', body: formData });
+            const result = await response.json();
+            document.getElementById('uploadResult').innerHTML = `<div class="result"><strong>✅ ${result.message}</strong>
+                <br>Document ID: ${result.documentId}<br>Chunks: ${result.chunks}</div>`;
+        }
+
+        async function askQuestion() {
+            const question = document.getElementById('questionInput').value;
+            if (!question) {
+                alert('Please enter a question');
+                return;
+            }
+
+            // Show loading with better styling
+            document.getElementById('askResult').innerHTML = `
+                <div class="result">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <div>🔍 Searching documents and generating answer...</div>
+                    </div>
+                </div>`;
+
+            // Add CSS for spinner
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                const result = await response.json();
+                
+                let sourcesHtml = '';
+                if (result.sources && result.sources.length > 0) {
+                    sourcesHtml = `
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e9ecef;">
+                        <h4 style="color: #495057; margin-bottom: 10px;">📚 Sources Used:</h4>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            ${result.sources.map(source => 
+                                `<div class="source" style="background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 3px solid #28a745;">
+                                    <div style="font-weight: bold; color: #2c3e50;">${source.source}</div>
+                                    <div style="font-size: 0.85em; color: #6c757d; margin: 5px 0;">
+                                        📄 Page ${source.page} • 🔍 Relevance: High
+                                    </div>
+                                    <div style="font-size: 0.9em; color: #495057; font-style: italic;">
+                                        "${source.contentPreview}"
+                                    </div>
+                                </div>`
+                            ).join('')}
+                        </div>
+                    </div>`;
+                }
+                
+                // Format the answer with chat-like styling
+                const formattedAnswer = formatRagAnswer(result.answer);
+                
+                document.getElementById('askResult').innerHTML = `
+                    <div class="result">
+                        <!-- User Question -->
+                        <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 10px; border-left: 4px solid #2196f3;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                <div style="width: 32px; height: 32px; background: #2196f3; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">👤</div>
+                                <strong style="color: #1976d2;">Your Question</strong>
+                            </div>
+                            <div style="color: #1565c0; font-size: 1.1em;">${question}</div>
+                        </div>
+                        
+                        <!-- AI Response -->
+                        <div style="margin-bottom: 15px; padding: 15px; background: #f1f8e9; border-radius: 10px; border-left: 4px solid #4caf50;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                                <div style="width: 32px; height: 32px; background: #4caf50; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">🤖</div>
+                                <strong style="color: #2e7d32;">AI Assistant Response</strong>
+                            </div>
+                            <div style="line-height: 1.6; color: #1b5e20; font-size: 1em;">
+                                ${formattedAnswer}
+                            </div>
+                        </div>
+                        
+                        <!-- Stats -->
+                        <div class="stats" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                                <span>🔍 ${result.relevantChunks} relevant sections</span>
+                                <span>👤 User: ${result.userId}</span>
+                                <span>⚡ Powered by RAG</span>
+                            </div>
+                        </div>
+                        
+                        ${sourcesHtml}
+                    </div>`;
+
+            } catch (error) {
+                console.error('Ask error:', error);
+                document.getElementById('askResult').innerHTML = `
+                    <div class="result" style="border-left-color: #dc3545;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <div style="width: 32px; height: 32px; background: #dc3545; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">❌</div>
+                            <strong style="color: #dc3545;">Error</strong>
+                        </div>
+                        <div>Sorry, there was an error processing your question: ${error.message}</div>
+                    </div>`;
+            }
+        }
+
+        // Function to format AI responses with better styling
+        function formatRagAnswer(text) {
+            return text
+                // Convert **bold** to styled bold
+                .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1a237e; background: #e8eaf6; padding: 2px 6px; border-radius: 3px;">$1</strong>')
+                // Convert *italic* to styled italic
+                .replace(/\*(.*?)\*/g, '<em style="color: #5d4037; font-style: italic;">$1</em>')
+                // Convert bullet points with better styling
+                .replace(/^•\s+(.*$)/gm, '<div style="margin: 8px 0; padding-left: 25px; position: relative; display: flex; align-items: flex-start;"><span style="color: #4caf50; font-weight: bold; margin-right: 8px;">•</span><span>$1</span></div>')
+                .replace(/^-\s+(.*$)/gm, '<div style="margin: 8px 0; padding-left: 25px; position: relative; display: flex; align-items: flex-start;"><span style="color: #ff9800; font-weight: bold; margin-right: 8px;">-</span><span>$1</span></div>')
+                // Convert numbered lists
+                .replace(/^(\d+)\.\s+(.*$)/gm, '<div style="margin: 8px 0; padding-left: 25px; display: flex; align-items: flex-start;"><span style="color: #2196f3; font-weight: bold; margin-right: 8px;">$1.</span><span>$2</span></div>')
+                // Convert headings
+                .replace(/^##\s+(.*$)/gm, '<h4 style="color: #2e7d32; margin: 20px 0 12px 0; padding-bottom: 8px; border-bottom: 2px solid #c8e6c9; font-size: 1.2em;">$1</h4>')
+                .replace(/^#\s+(.*$)/gm, '<h3 style="color: #1b5e20; margin: 25px 0 15px 0; padding-bottom: 10px; border-bottom: 3px solid #4caf50; font-size: 1.3em;">$1</h3>')
+                // Convert line breaks and paragraphs
+                .replace(/\n\n/g, '</div><div style="margin-bottom: 15px;">')
+                .replace(/\n/g, '<br>')
+                // Add container for the text
+                .replace(/^/, '<div style="margin-bottom: 15px;">')
+                .replace(/$/, '</div>')
+                // Handle quotes or special sections
+                .replace(/">"(.*?)"</g, '<blockquote style="border-left: 4px solid #ff9800; padding: 10px 15px; margin: 15px 0; background: #fff3e0; border-radius: 0 4px 4px 0;">$1</blockquote>');
+        }
+
+        // Function to format AI responses with better styling (for chat and summary)
+        function formatAnswer(text) {
+            return text
+                // Convert **bold** to styled bold
+                .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1a237e; background: #e8eaf6; padding: 2px 6px; border-radius: 3px;">$1</strong>')
+                // Convert *italic* to styled italic
+                .replace(/\*(.*?)\*/g, '<em style="color: #5d4037; font-style: italic;">$1</em>')
+                // Convert bullet points with better styling
+                .replace(/^•\s+(.*$)/gm, '<div style="margin: 8px 0; padding-left: 25px; position: relative; display: flex; align-items: flex-start;"><span style="color: #4caf50; font-weight: bold; margin-right: 8px;">•</span><span>$1</span></div>')
+                .replace(/^-\s+(.*$)/gm, '<div style="margin: 8px 0; padding-left: 25px; position: relative; display: flex; align-items: flex-start;"><span style="color: #ff9800; font-weight: bold; margin-right: 8px;">-</span><span>$1</span></div>')
+                // Convert numbered lists
+                .replace(/^(\d+)\.\s+(.*$)/gm, '<div style="margin: 8px 0; padding-left: 25px; display: flex; align-items: flex-start;"><span style="color: #2196f3; font-weight: bold; margin-right: 8px;">$1.</span><span>$2</span></div>')
+                // Convert headings
+                .replace(/^##\s+(.*$)/gm, '<h4 style="color: #2e7d32; margin: 20px 0 12px 0; padding-bottom: 8px; border-bottom: 2px solid #c8e6c9; font-size: 1.2em;">$1</h4>')
+                .replace(/^#\s+(.*$)/gm, '<h3 style="color: #1b5e20; margin: 25px 0 15px 0; padding-bottom: 10px; border-bottom: 3px solid #4caf50; font-size: 1.3em;">$1</h3>')
+                // Convert line breaks and paragraphs
+                .replace(/\n\n/g, '</div><div style="margin-bottom: 15px;">')
+                .replace(/\n/g, '<br>')
+                // Add container for the text
+                .replace(/^/, '<div style="margin-bottom: 15px;">')
+                .replace(/$/, '</div>');
+        }
+
+        async function summarizeText() {
+            const input = document.getElementById('textInput').value.trim();
+            
+            if (!input) {
+                alert('Please enter either text to summarize or a document ID');
+                return;
+            }
+
+            // Show loading with better styling
+            document.getElementById('summaryResult').innerHTML = `
+                <div class="result">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <div>📝 Generating summary...<br><small>This may take 10-30 seconds</small></div>
+                    </div>
+                </div>`;
+
+            let requestBody = {};
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            
+            if (uuidRegex.test(input)) {
+                requestBody = { documentId: input };
+            } else {
+                requestBody = { text: input };
+            }
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+                const response = await fetch('/summarize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    document.getElementById('summaryResult').innerHTML = `
+                        <div class="result" style="border-left-color: #dc3545;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div style="width: 32px; height: 32px; background: #dc3545; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">❌</div>
+                                <strong style="color: #dc3545;">Error</strong>
+                            </div>
+                            <div>${result.error}</div>
+                        </div>`;
+                } else {
+                    const formattedSummary = formatAnswer(result.summary);
+                    document.getElementById('summaryResult').innerHTML = `
+                        <div class="result">
+                            <!-- Summary Header -->
+                            <div style="margin-bottom: 20px; padding: 15px; background: #fff3e0; border-radius: 10px; border-left: 4px solid #ff9800;">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                    <div style="width: 32px; height: 32px; background: #ff9800; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">📋</div>
+                                    <strong style="color: #e65100;">AI Summary</strong>
+                                </div>
+                                ${result.documentName ? 
+                                    `<div style="color: #ef6c00; font-size: 1.1em;">Document: ${result.documentName}</div>` : 
+                                    `<div style="color: #ef6c00; font-size: 1.1em;">Text Summary</div>`
+                                }
+                            </div>
+                            
+                            <!-- Summary Content -->
+                            <div style="margin-bottom: 15px; padding: 15px; background: #f1f8e9; border-radius: 10px; border-left: 4px solid #4caf50;">
+                                <div style="line-height: 1.6; color: #1b5e20; font-size: 1em;">
+                                    ${formattedSummary}
+                                </div>
+                            </div>
+                            
+                            <!-- Stats -->
+                            <div class="stats" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                                    <span>📊 Type: ${result.type || 'text'}</span>
+                                    <span>📏 Length: ${result.originalLength} → ${result.summaryLength} characters</span>
+                                    <span>⚡ Compression: ${Math.round((1 - result.summaryLength/result.originalLength) * 100)}%</span>
+                                </div>
+                            </div>
+                        </div>`;
+                }
+            } catch (error) {
+                console.error('Summarize error:', error);
+                if (error.name === 'AbortError') {
+                    document.getElementById('summaryResult').innerHTML = `
+                        <div class="result" style="border-left-color: #dc3545;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div style="width: 32px; height: 32px; background: #dc3545; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">⏰</div>
+                                <strong style="color: #dc3545;">Timeout Error</strong>
+                            </div>
+                            <div>Summary generation took too long.<br><small>Try with shorter text or a smaller document</small></div>
+                        </div>`;
+                } else {
+                    document.getElementById('summaryResult').innerHTML = `
+                        <div class="result" style="border-left-color: #dc3545;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div style="width: 32px; height: 32px; background: #dc3545; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">❌</div>
+                                <strong style="color: #dc3545;">Error</strong>
+                            </div>
+                            <div>${error.message}</div>
+                        </div>`;
+                }
+            }
+        }
+
+        // Helper function to display document IDs
+        async function displayDocumentIDs() {
+            const response = await fetch('/documents');
+            const result = await response.json();
+            
+            let html = `<div class="result">
+                <strong>📋 Available Documents (Copy ID to summarize):</strong><br>`;
+            
+            result.documents.forEach(doc => {
+                html += `<div class="source">
+                    <strong>${doc.filename}</strong><br>
+                    <small>ID: <code onclick="copyToClipboard('${doc.id}')" style="cursor: pointer; background: #f8f9fa; padding: 2px 5px; border-radius: 3px;">${doc.id}</code></small><br>
+                    Chunks: ${doc.chunks} | Uploaded: ${new Date(doc.uploadedAt).toLocaleString()}
+                </div>`;
+            });
+            
+            html += `</div>`;
+            document.getElementById('documentsResult').innerHTML = html;
+        }
+
+        // Helper to copy document ID to clipboard
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Document ID copied to clipboard! Paste it in the Summarize tab.');
+            });
+        }
+
+        // Update the loadDocuments function to use the new one
+        async function loadDocuments() {
+            await displayDocumentIDs();
+        }
+
+        async function sendChat() {
+            const message = document.getElementById('chatInput').value;
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+
+            // Show loading
+            const loadingHtml = `
+                <div class="result">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <div>💭 Thinking...</div>
+                    </div>
+                </div>`;
+            document.getElementById('chatResult').innerHTML += loadingHtml;
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message, userId: 'user1' })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Remove loading message
+                document.getElementById('chatResult').lastChild.remove();
+                
+                const formattedResponse = formatAnswer(result.response);
+                
+                document.getElementById('chatResult').innerHTML += `
+                    <!-- User Message -->
+                    <div class="result" style="margin-bottom: 15px;">
+                        <div style="padding: 15px; background: #e3f2fd; border-radius: 10px; border-left: 4px solid #2196f3;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                <div style="width: 32px; height: 32px; background: #2196f3; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">👤</div>
+                                <strong style="color: #1976d2;">You</strong>
+                            </div>
+                            <div style="color: #1565c0; font-size: 1.1em;">${message}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- AI Response -->
+                    <div class="result" style="margin-bottom: 20px;">
+                        <div style="padding: 15px; background: #f1f8e9; border-radius: 10px; border-left: 4px solid #4caf50;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                                <div style="width: 32px; height: 32px; background: #4caf50; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">🤖</div>
+                                <strong style="color: #2e7d32;">Assistant</strong>
+                            </div>
+                            <div style="line-height: 1.6; color: #1b5e20; font-size: 1em;">
+                                ${formattedResponse}
+                            </div>
+                            <div style="margin-top: 10px; font-size: 0.8em; color: #7f8c8d; border-top: 1px solid #e9ecef; padding-top: 8px;">
+                                💭 Memory: ${result.memoryLength} messages | 
+                                🕒 ${new Date(result.timestamp).toLocaleTimeString()}
+                            </div>
+                        </div>
+                    </div>`;
+                    
+            } catch (error) {
+                // Remove loading message
+                document.getElementById('chatResult').lastChild.remove();
+                
+                console.error('Chat error:', error);
+                document.getElementById('chatResult').innerHTML += `
+                    <div class="result" style="border-left-color: #dc3545;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <div style="width: 32px; height: 32px; background: #dc3545; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">❌</div>
+                            <strong style="color: #dc3545;">Error</strong>
+                        </div>
+                        <div>Sorry, there was an error: ${error.message}</div>
+                    </div>`;
+            }
+            
+            // Clear input and scroll to bottom
+            document.getElementById('chatInput').value = '';
+            document.getElementById('chatResult').scrollTop = document.getElementById('chatResult').scrollHeight;
+        }
+
+        async function check() {
+            const response = await fetch('/memory/user1');
+            const result = await response.json();
+            document.getElementById('memoryResult').innerHTML = `
+                <div class="result">
+                    <strong>🧠 Memory for ${result.userId}:</strong><br>
+                    Messages: ${result.messageCount}<br>
+                    Recent: ${JSON.stringify(result.recentMessages)}
+                </div>`;
+        }
+
+                        // Clear memory for Chat tab (just clears the display)
+        async function clearChatMemory() {
+          await fetch('/memory/user1', { method: 'DELETE' });
+          document.getElementById('chatResult').innerHTML = '<div class="result">✅ Memory cleared! Start a new conversation.</div>';
+          alert("Server memory cleared!\n\nNote: You need to REFRESH the page to see the chat completely empty.\n\nNew messages will start fresh.");
+        }
+
+        // Clear all memory for Memory tab
+        async function clearAllMemory() {
+          try {
+            const response = await fetch('/memory/user1', { method: 'DELETE' });
+            const result = await response.json();
+            
+            document.getElementById('memoryResult').innerHTML = `
+                <div class="result">
+                    <strong>✅ ${result.message}</strong><br>
+                    <div class="stats">
+                        User: ${result.userId} | Memory cleared successfully
+                    </div>
+                </div>`;
+            
+            // ADD THIS ALERT:
+            alert("Memory deleted from server!\n\nRefresh the page to see the chat completely empty.");
+            
+          } catch (error) {
+            document.getElementById('memoryResult').innerHTML = `
+                <div class="result" style="border-left-color: #dc3545;">
+                    <strong>❌ Error clearing memory:</strong> ${error.message}
+                </div>`;
+          }
+        }
+
+        // Check memory function
+        async function checkMemory() {
+            try {
+                const response = await fetch('/memory/user1');
+                const result = await response.json();
+                
+                let memoryHtml = '';
+                if (result.recentMessages && result.recentMessages.length > 0) {
+                    memoryHtml = '<h4>Recent Messages:</h4>' + 
+                        result.recentMessages.map(msg => `
+                            <div class="source">
+                                <strong>${msg.type}:</strong> ${msg.content}
+                                <br><small>${new Date(msg.timestamp).toLocaleString()}</small>
+                            </div>
+                        `).join('');
+                }
+                
+                document.getElementById('memoryResult').innerHTML = `
+                    <div class="result">
+                        <strong>🧠 Memory for ${result.userId}:</strong><br>
+                        <div class="stats">
+                            Total Messages: ${result.messageCount}
+                        </div>
+                        ${memoryHtml || '<p>No recent messages in memory.</p>'}
+                    </div>`;
+            } catch (error) {
+                document.getElementById('memoryResult').innerHTML = `
+                    <div class="result" style="border-left-color: #dc3545;">
+                        <strong>❌ Error checking memory:</strong> ${error.message}
+                    </div>`;
+            }
+        }
+
+        async function loadDocuments() {
+            const response = await fetch('/documents');
+            const result = await response.json();
+            
+            let html = `<div class="result">
+                <strong>📚 Available Documents (${result.totalDocuments}):</strong><br>
+                <p><em>Click on a Document ID to copy it for summarization</em></p>`;
+            
+            if (result.documents.length === 0) {
+                html += `<div class="source">No documents uploaded yet. Use the Upload tab to add PDFs.</div>`;
+            } else {
+                result.documents.forEach(doc => {
+                    html += `
+                    <div class="source" style="cursor: pointer; margin: 10px 0; padding: 15px; border-left: 4px solid #28a745;" onclick="copyDocumentId('${doc.id}')">
+                        <strong>📄 ${doc.filename}</strong><br>
+                        <div style="margin: 8px 0;">
+                            <strong>Document ID:</strong> 
+                            <code style="background: #007bff; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.9em;">
+                                ${doc.id}
+                            </code>
+                        </div>
+                        <div style="font-size: 0.9em; color: #666;">
+                            📊 Chunks: ${doc.chunks} | 
+                            💾 Size: ${(doc.size / 1024 / 1024).toFixed(2)} MB | 
+                            📅 Uploaded: ${new Date(doc.uploadedAt).toLocaleString()}
+                        </div>
+                    </div>`;
+                });
+            }
+            
+            html += `</div>`;
+            document.getElementById('documentsResult').innerHTML = html;
+        }
+
+        // Function to copy document ID
+        // Outer function scope
+        function copyDocumentId(documentId) {
+            navigator.clipboard.writeText(documentId).then(() => {
+                // Show success message
+                // Create notification in outer scope
+                const notification = document.createElement('div');  // Variable in outer scope
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #28a745;
+                    color: white;
+                    padding: 15px 20px;
+                    border-radius: 5px;
+                    z-index: 1000;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                `;
+                notification.innerHTML = `✅ Document ID copied!<br><small>Paste it in the Summarize tab</small>`;
+                document.body.appendChild(notification);
+                
+                // Remove notification after 3 seconds
+                // setTimeout creates a closure:
+                // CLOSURE - arrow function captures 'notification' from outer scope
+                setTimeout(() => {
+                    document.body.removeChild(notification); // ← Still has access to 'notification'
+                }, 3000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy Document ID. Please copy it manually: ' + documentId);
+            });
+        }
+
+        // Open first tab by default
+        document.getElementsByClassName('tablinks')[0].click();
+
+    </script>
+</body>
+</html>
