@@ -264,8 +264,11 @@ app.post("/summarize", async (req, res) => {
       }
 
       // Get all chunks for this document
-      const allDocs = await vectorStore.similaritySearch("", 100);
-      const documentChunks = allDocs.filter(doc => 
+      const relevantDocs = await vectorStore.similaritySearch(
+        document.filename.substring(0, 50), // First 50 chars of filename
+        50 // Limit to 50 results
+      );
+      const documentChunks = relevantDocs.filter(doc => 
         doc.metadata.source === document.filename
       );
 
