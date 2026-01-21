@@ -588,6 +588,37 @@
             }
         }
 
+        // Function to copy document ID
+        function copyDocumentId(documentId) {
+            navigator.clipboard.writeText(documentId).then(() => {
+                // Show success message
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #28a745;
+                    color: white;
+                    padding: 15px 20px;
+                    border-radius: 5px;
+                    z-index: 1000;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                `;
+                notification.innerHTML = `✅ Document ID copied!<br><small>Paste it in the Summarize tab</small>`;
+                document.body.appendChild(notification);
+                
+                // Remove notification after 3 seconds
+                setTimeout(() => {
+                    if (document.body.contains(notification)) {
+                        document.body.removeChild(notification);
+                    }
+                }, 3000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy Document ID. Please copy it manually: ' + documentId);
+            });
+        }
+
         async function loadDocuments() {
         try {
             const response = await fetch('/documents');
@@ -638,5 +669,6 @@
     </script>
 </body>
 </html>
+
 
 
