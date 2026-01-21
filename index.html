@@ -95,27 +95,6 @@
         `;
         document.head.appendChild(spinnerStyle);
 
-        // Add this function to show user info
-        async function loadUserProfile() {
-            try {
-                const response = await fetch('/profile');
-                const profile = await response.json();
-                
-                // Add user info to the page header
-                const header = document.querySelector('h1');
-                header.innerHTML += ` <span style="font-size: 0.6em; background: #007bff; color: white; padding: 4px 8px; border-radius: 10px; vertical-align: middle;">
-                    👤 User: ${profile.userId.substring(0, 8)}...
-                </span>`;
-                
-                console.log('User loaded:', profile.userId);
-            } catch (error) {
-                console.log('User session initialized');
-            }
-        }
-        
-        // Call this on page load
-        document.addEventListener('DOMContentLoaded', loadUserProfile);
-                
         async function uploadFile() {
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
@@ -588,51 +567,16 @@
             }
         }
 
-        // Function to copy document ID
-        function copyDocumentId(documentId) {
-            navigator.clipboard.writeText(documentId).then(() => {
-                // Show success message
-                const notification = document.createElement('div');
-                notification.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    background: #28a745;
-                    color: white;
-                    padding: 15px 20px;
-                    border-radius: 5px;
-                    z-index: 1000;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                `;
-                notification.innerHTML = `✅ Document ID copied!<br><small>Paste it in the Summarize tab</small>`;
-                document.body.appendChild(notification);
-                
-                // Remove notification after 3 seconds
-                setTimeout(() => {
-                    if (document.body.contains(notification)) {
-                        document.body.removeChild(notification);
-                    }
-                }, 3000);
-            }).catch(err => {
-                console.error('Failed to copy: ', err);
-                alert('Failed to copy Document ID. Please copy it manually: ' + documentId);
-            });
-        }
-
         async function loadDocuments() {
-        try {
             const response = await fetch('/documents');
             const result = await response.json();
             
             let html = `<div class="result">
-                <strong>📚 Available Documents (${result.totalDocuments || 0}):</strong><br>`;
+                <strong>📚 Available Documents (${result.totalDocuments}):</strong><br>
+                <p><em>Click on a Document ID to copy it for summarization</em></p>`;
             
-            if (!result.documents || result.documents.length === 0) {
-                html += `<div class="source" style="background: #fff3cd; border-left: 4px solid #ffc107;">
-                    <strong>⚠️ No documents found!</strong><br>
-                    <p>Go to <strong>"Upload PDF"</strong> tab and upload a PDF first.</p>
-                    <p><em>After uploading, documents will appear here automatically.</em></p>
-                </div>`;
+            if (result.documents.length === 0) {
+                html += `<div class="source">No documents uploaded yet. Use the Upload tab to add PDFs.</div>`;
             } else {
                 result.documents.forEach(doc => {
                     html += `
@@ -655,20 +599,44 @@
             
             html += `</div>`;
             document.getElementById('documentsResult').innerHTML = html;
-        } catch (error) {
-            console.error('Error loading documents:', error);
-            document.getElementById('documentsResult').innerHTML = `
-                <div class="result" style="border-left-color: #dc3545;">
-                    <strong>❌ Error loading documents:</strong> ${error.message}
-                </div>`;
         }
-    }
+
+        // Function to copy document ID
+        // Outer function scope
+        function copyDocumentId(documentId) {
+            navigator.clipboard.writeText(documentId).then(() => {
+                // Show success message
+                // Create notification in outer scope
+                const notification = document.createElement('div');  // Variable in outer scope
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #28a745;
+                    color: white;
+                    padding: 15px 20px;
+                    border-radius: 5px;
+                    z-index: 1000;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                `;
+                notification.innerHTML = `✅ Document ID copied!<br><small>Paste it in the Summarize tab</small>`;
+                document.body.appendChild(notification);
+                
+                // Remove notification after 3 seconds
+                // setTimeout creates a closure:
+                // CLOSURE - arrow function captures 'notification' from outer scope
+                setTimeout(() => {
+                    document.body.removeChild(notification); // ← Still has access to 'notification'
+                }, 3000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy Document ID. Please copy it manually: ' + documentId);
+            });
+        }
+
         // Open first tab by default
         document.getElementsByClassName('tablinks')[0].click();
 
     </script>
 </body>
 </html>
-
-
-
