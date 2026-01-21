@@ -95,6 +95,27 @@
         `;
         document.head.appendChild(spinnerStyle);
 
+        // Add this function to show user info
+        async function loadUserProfile() {
+            try {
+                const response = await fetch('/profile');
+                const profile = await response.json();
+                
+                // Add user info to the page header
+                const header = document.querySelector('h1');
+                header.innerHTML += ` <span style="font-size: 0.6em; background: #007bff; color: white; padding: 4px 8px; border-radius: 10px; vertical-align: middle;">
+                    👤 User: ${profile.userId.substring(0, 8)}...
+                </span>`;
+                
+                console.log('User loaded:', profile.userId);
+            } catch (error) {
+                console.log('User session initialized');
+            }
+        }
+        
+        // Call this on page load
+        document.addEventListener('DOMContentLoaded', loadUserProfile);
+                
         async function uploadFile() {
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
@@ -640,3 +661,4 @@
     </script>
 </body>
 </html>
+
