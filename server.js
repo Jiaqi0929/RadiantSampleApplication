@@ -1,6 +1,7 @@
 // 'import' syntax bound
 import express from "express";
 import multer from "multer";
+import cors from "cors"; 
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -37,7 +38,6 @@ const PORT = process.env.PORT || 3000;
 
 
 // Middleware
-import cors from "cors"; 
 app.use(express.json());
 app.use(cors()); 
 app.use(express.static(__dirname));
