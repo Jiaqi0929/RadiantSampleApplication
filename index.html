@@ -375,26 +375,6 @@
             }
         }
 
-        // Helper function to display document IDs
-        async function displayDocumentIDs() {
-            const response = await fetch('/documents');
-            const result = await response.json();
-            
-            let html = `<div class="result">
-                <strong>📋 Available Documents (Copy ID to summarize):</strong><br>`;
-            
-            result.documents.forEach(doc => {
-                html += `<div class="source">
-                    <strong>${doc.filename}</strong><br>
-                    <small>ID: <code onclick="copyToClipboard('${doc.id}')" style="cursor: pointer; background: #f8f9fa; padding: 2px 5px; border-radius: 3px;">${doc.id}</code></small><br>
-                    Chunks: ${doc.chunks} | Uploaded: ${new Date(doc.uploadedAt).toLocaleString()}
-                </div>`;
-            });
-            
-            html += `</div>`;
-            document.getElementById('documentsResult').innerHTML = html;
-        }
-
         // Helper to copy document ID to clipboard
         function copyToClipboard(text) {
             navigator.clipboard.writeText(text).then(() => {
@@ -486,18 +466,7 @@
             document.getElementById('chatResult').scrollTop = document.getElementById('chatResult').scrollHeight;
         }
 
-        async function check() {
-            const response = await fetch('/memory/user1');
-            const result = await response.json();
-            document.getElementById('memoryResult').innerHTML = `
-                <div class="result">
-                    <strong>🧠 Memory for ${result.userId}:</strong><br>
-                    Messages: ${result.messageCount}<br>
-                    Recent: ${JSON.stringify(result.recentMessages)}
-                </div>`;
-        }
-
-                        // Clear memory for Chat tab (just clears the display)
+        // Clear memory for Chat tab (just clears the display)
         async function clearChatMemory() {
           await fetch('/memory/user1', { method: 'DELETE' });
           document.getElementById('chatResult').innerHTML = '<div class="result">✅ Memory cleared! Start a new conversation.</div>';
