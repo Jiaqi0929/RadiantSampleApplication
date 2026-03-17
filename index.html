@@ -402,11 +402,6 @@
             });
         }
 
-        // Update the loadDocuments function to use the new one
-        async function loadDocuments() {
-            await displayDocumentIDs();
-        }
-
         async function sendChat() {
             const message = document.getElementById('chatInput').value;
             if (!message) {
