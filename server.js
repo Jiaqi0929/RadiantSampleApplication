@@ -1,24 +1,23 @@
 // 'import' syntax bound
-import express from "express";
-import multer from "multer";
-import cors from "cors"; 
-import dotenv from "dotenv";
-import { fileURLToPath } from "url";
+import express from "express"; // Web server framework
+import multer from "multer"; // Handles file uploads
+import dotenv from "dotenv"; // Loads environment variables (.env file)
+import { fileURLToPath } from "url"; // File path utilities
 import path from "path";
-// 'uuidv4' implicitly declared
-import { v4 as uuidv4 } from "uuid";
+// 'uuidv4' implicitly declared 
+import { v4 as uuidv4 } from "uuid"; //Generates unique IDs
 
 // ========== LANGCHAIN IMPORTS ==========
 // Static Binding
-import { MemoryVectorStore } from "langchain/vectorstores/memory";
-import { OpenAIEmbeddings } from "@langchain/openai";
+import { MemoryVectorStore } from "langchain/vectorstores/memory"; // Stores document embeddings in memory
+import { OpenAIEmbeddings } from "@langchain/openai"; // Converts text to vectors
 import { ChatOpenAI } from "@langchain/openai";
 // Link-time bindings for PDF loading
 import { PDFLoader } from "langchain/document_loaders/fs/pdf";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
-import { BufferMemory } from "langchain/memory";
-import { ConversationChain } from "langchain/chains";
-import { PromptTemplate } from "langchain/prompts";
+import { BufferMemory } from "langchain/memory"; // Stores conversation history
+import { ConversationChain } from "langchain/chains"; // Sequences of LLM operations
+import { PromptTemplate } from "langchain/prompts"; // Templates for LLM instructions
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { RunnableSequence } from "@langchain/core/runnables";
 // =======================================
@@ -39,7 +38,6 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
-app.use(cors()); 
 app.use(express.static(__dirname));
 
 const upload = multer({ 
@@ -50,55 +48,39 @@ const upload = multer({
 
 // ========== LANGCHAIN SETUP ==========
 
-// 1. Custom fetch wrapper for OpenRouter compatibility
-class OpenRouterCompatibleEmbeddings extends OpenAIEmbeddings {
-  async embedQuery(text) {
-    try {
-      const result = await super.embedQuery(text);
-      return result;
-    } catch (error) {
-      console.error("Embedding error:", error);
-      // Return empty embedding as fallback
-      return new Array(1536).fill(0);
-    }
-  }
-}
-
-// 2. Embeddings with OpenRouter (Fixed)
-const embeddings = new OpenRouterCompatibleEmbeddings({
+// 1. Embeddings with OpenRouter
+// Converts text to vector embeddings for semantic search
+// Bound at module load
+const embeddings = new OpenAIEmbeddings({
   openAIApiKey: process.env.OPENROUTER_API_KEY,
   configuration: {
     baseURL: "https://openrouter.ai/api/v1",
   },
-  modelName: "openai/text-embedding-ada-002",  // ✅ CHANGE THIS LINE
-  timeout: 30000,
-  maxRetries: 3
+  model: "text-embedding-3-small"
 });
 
-const vectorStore = new MemoryVectorStore(embeddings);
-
-// 3. LLM with better error handling
+// 2. Lightweight LLM (Gemma 2B)
 const chatModel = new ChatOpenAI({
   openAIApiKey: process.env.OPENROUTER_API_KEY,
   configuration: {
     baseURL: "https://openrouter.ai/api/v1",
   },
   modelName: "google/gemma-2-9b-it",
-  temperature: 0.1,
-  maxTokens: 1000,
-  timeout: 60000,
-  maxRetries: 2,
-  // Critical: Handle OpenRouter's response format
-  modelKwargs: {
-    stop: null
-  }
+  temperature: 0.1, //  Low randomness for consistent answers
+  maxTokens: 1000 // Response length limit
 });
+
+// 3. Vector Store for RAG
+// Explicit with 'let'
+// In-memory storage for document embeddings
+// Stores chunks as vectors for similarity search
+let vectorStore = new MemoryVectorStore(embeddings);
 
 // 4. Text Splitter for chunking
 const textSplitter = new RecursiveCharacterTextSplitter({
   // Static numeric literal - bound at load time
-  chunkSize: 1000,
-  chunkOverlap: 200,
+  chunkSize: 1000, // Each chunk ~1000 characters
+  chunkOverlap: 200, // // 200 chars overlap between chunks
 });
 
 // 5. Memory Management
@@ -130,13 +112,15 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     // HEAP-DYNAMIC (Explicit Management)
 
     // LangChain PDF Processing
+    // 1. Get uploaded file
     const blob = new Blob([req.file.buffer], { type: "application/pdf" }); 
+    // 2. Load PDF with LangChain
     const loader = new PDFLoader(blob);                                    
     const docs = await loader.load();    
-    // Text Chunking
+    // 3. Split into chunks
     const splitDocs = await textSplitter.splitDocuments(docs);
     console.log(`📄 Split into ${splitDocs.length} chunks`);
-    // Add metadata
+    // 4. Add metadata to each chunk
     const docsWithMetadata = splitDocs.map((doc, index) => ({
       ...doc,
       metadata: {
@@ -147,10 +131,10 @@ app.post("/upload", upload.single("file"), async (req, res) => {
         uploadedAt: new Date().toISOString()
       }
     }));
-    // Vector Storage
+    // 5. Store in vector database
     await vectorStore.addDocuments(docsWithMetadata);
     console.log("✅ Documents added to vector store");
-    // Metadata Management
+    // 6. Save document metadata
     const documentId = uuidv4();                     
     documentsMetadata.set(documentId, {       
       id: documentId,                         
@@ -160,6 +144,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       size: req.file.size
     });
 
+    // 7. Return success
     res.json({
       success: true,
       message: "PDF processed with LangChain RAG",
@@ -178,65 +163,40 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 // 2. RAG QUERY (Retrieval Augmented Generation)
 app.post("/ask", async (req, res) => {
   try {
-    const { question, userId = "default" } = req.body;
+    // Bound at runtime
+    // LOCAL VARIABLES
+    // FUNCTION SCOPE VARIABLES
+    const { question, userId = "default" } = req.body; // Only accessible in this function 
     if (!question) return res.status(400).json({ error: "No question provided" });
 
     console.log("🔍 Performing RAG query...");
 
-    // LANGCHAIN: Semantic search
+    // 1. Semantic search in vector store
     const relevantDocs = await vectorStore.similaritySearch(question, 4);
     console.log(`📚 Found ${relevantDocs.length} relevant chunks`);
 
-    // ✅ ADD THIS SAFETY CHECK
-    if (!relevantDocs || relevantDocs.length === 0) {
-      return res.json({
-        answer: "I couldn't find any relevant information in the uploaded documents. Please make sure you've uploaded a PDF file first.",
-        sources: [],
-        userId: userId,
-        relevantChunks: 0
-      });
-    }
+    // 2. Build context from relevant documents
+    const context = relevantDocs.map((doc, index) => 
+      `[Source ${index + 1} from "${doc.metadata.source}"]:\n${doc.pageContent}\n`
+    ).join("\n");
 
-    // ✅ FILTER OUT INVALID DOCUMENTS
-    const validDocs = relevantDocs.filter(doc => 
-      doc && 
-      doc.pageContent && 
-      typeof doc.pageContent === 'string' &&
-      doc.metadata && 
-      doc.metadata.source
-    );
-
-    if (validDocs.length === 0) {
-      return res.json({
-        answer: "The documents were found but couldn't be processed properly. Please try re-uploading the PDF.",
-        sources: [],
-        userId: userId,
-        relevantChunks: 0
-      });
-    }
-
-    // Build context safely
-    const context = validDocs.map((doc, index) => {
-      const source = doc.metadata?.source || 'Unknown source';
-      const content = doc.pageContent || '';
-      return `[Source ${index + 1} from "${source}"]:\n${content}\n`;
-    }).join("\n");
-
-    // Rest of your code remains the same...
-    // Get or create user memory
+    // 3. Get or create user memory
+    // userMemories is NONLOCAL - not declared here but accessible
     if (!userMemories.has(userId)) {
-      userMemories.set(userId, new BufferMemory({
+      userMemories.set(userId, new BufferMemory({ // Can modify global
         returnMessages: true,
         memoryKey: "history",
       }));
     }
-    const memory = userMemories.get(userId);
+    const memory = userMemories.get(userId);       // Can read global
 
+    // 4. Create conversation chain with memory
     const chain = new ConversationChain({ 
       llm: chatModel,
       memory: memory
     });
 
+     // 5. Build RAG prompt with context
     const ragPrompt = `
     CONTEXT FROM DOCUMENTS:
     ${context}
@@ -257,21 +217,20 @@ app.post("/ask", async (req, res) => {
 
     Please provide a helpful, well-formatted response:`;
 
+    // 6. Generate response
     const response = await chain.call({ input: ragPrompt });
 
-    // ✅ SAFELY MAP SOURCES
-    const sources = validDocs.map(doc => ({
-      source: doc.metadata?.source || 'Unknown',
-      page: doc.metadata?.loc?.pageNumber || 'N/A',
-      contentPreview: doc.pageContent ? doc.pageContent.substring(0, 150) + '...' : 'No preview available',
-      chunkId: doc.metadata?.chunkId || 'N/A'
-    }));
-
+    // 7. Return answer with sources
     res.json({
       answer: response.response,
-      sources: sources,
+      sources: relevantDocs.map(doc => ({
+        source: doc.metadata.source,
+        page: doc.metadata.loc?.pageNumber || 'N/A',
+        contentPreview: doc.pageContent.substring(0, 150) + '...',
+        chunkId: doc.metadata.chunkId
+      })),
       userId: userId,
-      relevantChunks: validDocs.length
+      relevantChunks: relevantDocs.length
     });
 
   } catch (error) {
@@ -324,16 +283,6 @@ app.post("/summarize", async (req, res) => {
         return res.status(404).json({ error: "No content found for this document" });
       }
 
-      /* DECLARATION ORDER IN LOOPS (FOR LOOP with BLOCK-SCOPED VARIABLES)
-      for (let i = 0; i < allDocs.length; i++) {  // 'i' declared in for statement
-        const doc = allDocs[i];  // 'doc' declared EACH iteration
-        if (doc.metadata.source === document.filename) {
-          documentChunks.push(doc);
-          // 'doc' destroyed after each iteration
-        }
-      }
-      */
-
       // Combine all chunks
       // Dynamically REBOUND to new string value
       textToSummarize = documentChunks.map(chunk => chunk.pageContent).join("\n\n");
@@ -353,32 +302,33 @@ app.post("/summarize", async (req, res) => {
 
     // Use a simpler prompt that works better with the model
     const simpleSummaryPrompt = PromptTemplate.fromTemplate(`
-Please provide a comprehensive yet concise summary of the following text. Focus on:
+      Please provide a comprehensive yet concise summary of the following text. Focus on:
 
-**MAIN POINTS:**
-- Key ideas and concepts
-- Important findings
-- Major conclusions
+      **MAIN POINTS:**
+      - Key ideas and concepts
+      - Important findings
+      - Major conclusions
 
-**STRUCTURE:**
-- Start with an overview
-- List key points with bullet points
-- End with main takeaways
+      **STRUCTURE:**
+      - Start with an overview
+      - List key points with bullet points
+      - End with main takeaways
 
-TEXT TO SUMMARIZE:
-{text}
+      TEXT TO SUMMARIZE:
+      {text}
 
-Please use clear formatting with **bold** for important terms and • bullet points for lists.
+      Please use clear formatting with **bold** for important terms and • bullet points for lists.
 
-SUMMARY:`);
+      SUMMARY:`);
 
+    // Create chain
     const summaryChain = RunnableSequence.from([
       simpleSummaryPrompt,
       chatModel,
       new StringOutputParser()
     ]);
 
-    // LANGCHAIN: Generate summary
+    // Generate summary
     console.log(`📋 Summarizing text (${textToSummarize.length} characters)...`);
     const summary = await summaryChain.invoke({ 
       text: textToSummarize.substring(0, 3000)  // Limit text length for performance
@@ -420,15 +370,16 @@ app.post("/chat", async (req, res) => {
     }
     const memory = userMemories.get(userId);
 
-    // LANGCHAIN: Create conversation chain
+    // Create conversation chain
     const chain = new ConversationChain({ 
       llm: chatModel,
       memory: memory
     });
 
-    // LANGCHAIN: Generate response with memory
+    // Generate response with memory
     const response = await chain.call({ input: message });
 
+    // Return response with memory stats
     res.json({
       response: response.response,
       userId: userId,
@@ -458,13 +409,14 @@ app.get("/memory/:userId", async (req, res) => {
     // Access global Map
     const memory = userMemories.get(userId);
     const chatHistory = await memory.chatHistory.getMessages();
-    
+    // Only the last 10 messages are shown in the display
     const recentMessages = chatHistory.slice(-10).map(msg => ({
       type: msg._getType(),
       content: msg.content,
       timestamp: new Date().toISOString()
     }));
     
+    // Server creates and talks back to the browser
     res.json({ 
       userId: userId,
       messageCount: chatHistory.length,
