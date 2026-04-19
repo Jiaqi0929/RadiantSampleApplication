@@ -65,7 +65,7 @@ const chatModel = new ChatOpenAI({
   configuration: {
     baseURL: "https://openrouter.ai/api/v1",
   },
-  modelName: "nousresearch/hermes-3-llama-3.1-8b:free",
+  modelName: "openai/gpt-3.5-turbo",
   temperature: 0.1, //  Low randomness for consistent answers
   maxTokens: 1000 // Response length limit
 });
