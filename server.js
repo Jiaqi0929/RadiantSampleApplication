@@ -65,7 +65,7 @@ const chatModel = new ChatOpenAI({
   configuration: {
     baseURL: "https://openrouter.ai/api/v1",
   },
-  modelName: "google/gemma-2-9b-it",
+  modelName: ""google/gemma-2-9b-it:free",
   temperature: 0.1, //  Low randomness for consistent answers
   maxTokens: 1000 // Response length limit
 });
