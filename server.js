@@ -70,7 +70,7 @@ const embeddings = new OpenRouterCompatibleEmbeddings({
   configuration: {
     baseURL: "https://openrouter.ai/api/v1",
   },
-  modelName: "text-embedding-3-small",
+  modelName: "openai/text-embedding-ada-002",  // ✅ CHANGE THIS LINE
   timeout: 30000,
   maxRetries: 3
 });
@@ -178,10 +178,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 // 2. RAG QUERY (Retrieval Augmented Generation)
 app.post("/ask", async (req, res) => {
   try {
-    // Bound at runtime
-    // LOCAL VARIABLES
-    // FUNCTION SCOPE VARIABLES
-    const { question, userId = "default" } = req.body; // Only accessible in this function 
+    const { question, userId = "default" } = req.body;
     if (!question) return res.status(400).json({ error: "No question provided" });
 
     console.log("🔍 Performing RAG query...");
@@ -190,28 +187,56 @@ app.post("/ask", async (req, res) => {
     const relevantDocs = await vectorStore.similaritySearch(question, 4);
     console.log(`📚 Found ${relevantDocs.length} relevant chunks`);
 
-    // Build context
-    const context = relevantDocs.map((doc, index) => 
-      `[Source ${index + 1} from "${doc.metadata.source}"]:\n${doc.pageContent}\n`
-    ).join("\n");
+    // ✅ ADD THIS SAFETY CHECK
+    if (!relevantDocs || relevantDocs.length === 0) {
+      return res.json({
+        answer: "I couldn't find any relevant information in the uploaded documents. Please make sure you've uploaded a PDF file first.",
+        sources: [],
+        userId: userId,
+        relevantChunks: 0
+      });
+    }
 
+    // ✅ FILTER OUT INVALID DOCUMENTS
+    const validDocs = relevantDocs.filter(doc => 
+      doc && 
+      doc.pageContent && 
+      typeof doc.pageContent === 'string' &&
+      doc.metadata && 
+      doc.metadata.source
+    );
+
+    if (validDocs.length === 0) {
+      return res.json({
+        answer: "The documents were found but couldn't be processed properly. Please try re-uploading the PDF.",
+        sources: [],
+        userId: userId,
+        relevantChunks: 0
+      });
+    }
+
+    // Build context safely
+    const context = validDocs.map((doc, index) => {
+      const source = doc.metadata?.source || 'Unknown source';
+      const content = doc.pageContent || '';
+      return `[Source ${index + 1} from "${source}"]:\n${content}\n`;
+    }).join("\n");
+
+    // Rest of your code remains the same...
     // Get or create user memory
-    // userMemories is NONLOCAL - not declared here but accessible
     if (!userMemories.has(userId)) {
-      userMemories.set(userId, new BufferMemory({ // Can modify global
+      userMemories.set(userId, new BufferMemory({
         returnMessages: true,
         memoryKey: "history",
       }));
     }
-    const memory = userMemories.get(userId);       // Can read global
+    const memory = userMemories.get(userId);
 
-    // LANGCHAIN: Create conversation chain with memory
     const chain = new ConversationChain({ 
       llm: chatModel,
       memory: memory
     });
 
-    // RAG prompt
     const ragPrompt = `
     CONTEXT FROM DOCUMENTS:
     ${context}
@@ -232,19 +257,21 @@ app.post("/ask", async (req, res) => {
 
     Please provide a helpful, well-formatted response:`;
 
-    // LANGCHAIN: Generate response
     const response = await chain.call({ input: ragPrompt });
+
+    // ✅ SAFELY MAP SOURCES
+    const sources = validDocs.map(doc => ({
+      source: doc.metadata?.source || 'Unknown',
+      page: doc.metadata?.loc?.pageNumber || 'N/A',
+      contentPreview: doc.pageContent ? doc.pageContent.substring(0, 150) + '...' : 'No preview available',
+      chunkId: doc.metadata?.chunkId || 'N/A'
+    }));
 
     res.json({
       answer: response.response,
-      sources: relevantDocs.map(doc => ({
-        source: doc.metadata.source,
-        page: doc.metadata.loc?.pageNumber || 'N/A',
-        contentPreview: doc.pageContent.substring(0, 150) + '...',
-        chunkId: doc.metadata.chunkId
-      })),
+      sources: sources,
       userId: userId,
-      relevantChunks: relevantDocs.length
+      relevantChunks: validDocs.length
     });
 
   } catch (error) {
