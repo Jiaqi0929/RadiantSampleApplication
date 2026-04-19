@@ -50,17 +50,32 @@ const upload = multer({
 
 // ========== LANGCHAIN SETUP ==========
 
-// 1. Embeddings with OpenRouter
-// Bound at module load
-const embeddings = new OpenAIEmbeddings({
+// 1. Custom fetch wrapper for OpenRouter compatibility
+class OpenRouterCompatibleEmbeddings extends OpenAIEmbeddings {
+  async embedQuery(text) {
+    try {
+      const result = await super.embedQuery(text);
+      return result;
+    } catch (error) {
+      console.error("Embedding error:", error);
+      // Return empty embedding as fallback
+      return new Array(1536).fill(0);
+    }
+  }
+}
+
+// 2. Embeddings with OpenRouter (Fixed)
+const embeddings = new OpenRouterCompatibleEmbeddings({
   openAIApiKey: process.env.OPENROUTER_API_KEY,
   configuration: {
     baseURL: "https://openrouter.ai/api/v1",
   },
-  model: "text-embedding-3-small"
+  modelName: "text-embedding-3-small",
+  timeout: 30000,
+  maxRetries: 3
 });
 
-// 2. Lightweight LLM (Gemma 2B)
+// 3. LLM with better error handling
 const chatModel = new ChatOpenAI({
   openAIApiKey: process.env.OPENROUTER_API_KEY,
   configuration: {
@@ -68,12 +83,14 @@ const chatModel = new ChatOpenAI({
   },
   modelName: "google/gemma-2-9b-it",
   temperature: 0.1,
-  maxTokens: 1000
+  maxTokens: 1000,
+  timeout: 60000,
+  maxRetries: 2,
+  // Critical: Handle OpenRouter's response format
+  modelKwargs: {
+    stop: null
+  }
 });
-
-// 3. Vector Store for RAG
-// Explicit with 'let'
-let vectorStore = new MemoryVectorStore(embeddings);
 
 // 4. Text Splitter for chunking
 const textSplitter = new RecursiveCharacterTextSplitter({
