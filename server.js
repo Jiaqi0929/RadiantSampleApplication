@@ -65,7 +65,7 @@ const chatModel = new ChatOpenAI({
   configuration: {
     baseURL: "https://openrouter.ai/api/v1",
   },
-  modelName: ""google/gemma-2-9b-it:free",
+  modelName: "mistralai/mistral-7b-instruct:free",
   temperature: 0.1, //  Low randomness for consistent answers
   maxTokens: 1000 // Response length limit
 });
@@ -502,6 +502,53 @@ app.get("/health", (req, res) => {
       activeUsers: userMemories.size
     }
   });
+});
+
+// Test different models
+app.get("/test-model/:model", async (req, res) => {
+  const models = {
+    gemma: "google/gemma-2-9b-it",
+    gemma_free: "google/gemma-2-9b-it:free",
+    mistral: "mistralai/mistral-7b-instruct:free",
+    llama3: "meta-llama/llama-3-8b-instruct:free",
+    phi3: "microsoft/phi-3-mini-4k-instruct:free"
+  };
+  
+  const modelKey = req.params.model;
+  const modelName = models[modelKey];
+  
+  if (!modelName) {
+    return res.json({ available: Object.keys(models) });
+  }
+  
+  try {
+    const testModel = new ChatOpenAI({
+      openAIApiKey: process.env.OPENROUTER_API_KEY,
+      configuration: { baseURL: "https://openrouter.ai/api/v1" },
+      modelName: modelName,
+      temperature: 0.1,
+      maxTokens: 50
+    });
+    
+    const response = await testModel.invoke("Say 'OK'");
+    res.json({ model: modelName, working: true, response: response.content });
+  } catch (error) {
+    res.json({ model: modelName, working: false, error: error.message });
+  }
+});
+
+app.get("/debug/vector-store", async (req, res) => {
+  try {
+    // Test if vector store has any documents
+    const testSearch = await vectorStore.similaritySearch("test", 1);
+    res.json({
+      hasDocuments: testSearch.length > 0,
+      documentCount: testSearch.length,
+      sampleDocument: testSearch[0]?.metadata?.source || "None"
+    });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
 });
 
 app.listen(PORT, () => {
