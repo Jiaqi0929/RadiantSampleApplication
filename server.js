@@ -65,7 +65,7 @@ const chatModel = new ChatOpenAI({
   configuration: {
     baseURL: "https://openrouter.ai/api/v1",
   },
-  modelName: "mistralai/mistral-7b-instruct:free",
+  modelName: "nousresearch/hermes-3-llama-3.1-8b:free",
   temperature: 0.1, //  Low randomness for consistent answers
   maxTokens: 1000 // Response length limit
 });
@@ -504,51 +504,40 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Test different models
-app.get("/test-model/:model", async (req, res) => {
-  const models = {
-    gemma: "google/gemma-2-9b-it",
-    gemma_free: "google/gemma-2-9b-it:free",
-    mistral: "mistralai/mistral-7b-instruct:free",
-    llama3: "meta-llama/llama-3-8b-instruct:free",
-    phi3: "microsoft/phi-3-mini-4k-instruct:free"
-  };
+app.get("/test-all-models", async (req, res) => {
+  const modelsToTest = [
+    "nousresearch/hermes-3-llama-3.1-8b:free",
+    "huggingfaceh4/zephyr-7b-beta:free",
+    "microsoft/phi-3-mini-4k-instruct:free",
+    "qwen/qwen-2-7b-instruct:free",
+    "liquid/lfm-40b:free",
+    "openai/gpt-3.5-turbo",  // Paid but cheap
+    "mistralai/mistral-7b-instruct",  // Paid but cheap
+  ];
   
-  const modelKey = req.params.model;
-  const modelName = models[modelKey];
+  const results = {};
   
-  if (!modelName) {
-    return res.json({ available: Object.keys(models) });
-  }
-  
-  try {
-    const testModel = new ChatOpenAI({
-      openAIApiKey: process.env.OPENROUTER_API_KEY,
-      configuration: { baseURL: "https://openrouter.ai/api/v1" },
-      modelName: modelName,
-      temperature: 0.1,
-      maxTokens: 50
-    });
+  for (const modelName of modelsToTest) {
+    try {
+      const testModel = new ChatOpenAI({
+        openAIApiKey: process.env.OPENROUTER_API_KEY,
+        configuration: { baseURL: "https://openrouter.ai/api/v1" },
+        modelName: modelName,
+        temperature: 0.1,
+        maxTokens: 20
+      });
+      
+      const response = await testModel.invoke("Say 'ok'");
+      results[modelName] = { working: true, response: response.content };
+    } catch (error) {
+      results[modelName] = { working: false, error: error.message };
+    }
     
-    const response = await testModel.invoke("Say 'OK'");
-    res.json({ model: modelName, working: true, response: response.content });
-  } catch (error) {
-    res.json({ model: modelName, working: false, error: error.message });
+    // Small delay to avoid rate limits
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
-});
-
-app.get("/debug/vector-store", async (req, res) => {
-  try {
-    // Test if vector store has any documents
-    const testSearch = await vectorStore.similaritySearch("test", 1);
-    res.json({
-      hasDocuments: testSearch.length > 0,
-      documentCount: testSearch.length,
-      sampleDocument: testSearch[0]?.metadata?.source || "None"
-    });
-  } catch (error) {
-    res.json({ error: error.message });
-  }
+  
+  res.json(results);
 });
 
 app.listen(PORT, () => {
