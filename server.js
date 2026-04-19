@@ -75,6 +75,8 @@ const embeddings = new OpenRouterCompatibleEmbeddings({
   maxRetries: 3
 });
 
+const vectorStore = new MemoryVectorStore(embeddings);
+
 // 3. LLM with better error handling
 const chatModel = new ChatOpenAI({
   openAIApiKey: process.env.OPENROUTER_API_KEY,
